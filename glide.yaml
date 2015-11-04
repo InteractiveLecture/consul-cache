@@ -1,0 +1,5 @@
+package: servicecache
+import:
+  - package: github.com/hashicorp/consul
+    subpackages:
+      - /api
