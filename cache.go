@@ -48,6 +48,10 @@ func getFromServer(consulAddress string) (map[string]*api.AgentService, error) {
 	return services, nil
 }
 
+func Stop() bool {
+	return instance.Stop()
+}
+
 func (cache *ConsulCache) Stop() bool {
 
 	if !cache.alreadyRunning {
@@ -64,8 +68,16 @@ func (cache *ConsulCache) Stop() bool {
 	return true
 }
 
+func AlreadyRunning() bool {
+	return instance.AlreadyRunning()
+}
+
 func (cache *ConsulCache) AlreadyRunning() bool {
 	return cache.alreadyRunning
+}
+
+func IsWatched(services ...string) bool {
+	return instance.IsWatched(services...)
 }
 
 func (cache *ConsulCache) IsWatched(services ...string) bool {
@@ -78,7 +90,7 @@ func (cache *ConsulCache) IsWatched(services ...string) bool {
 	return true
 }
 
-func Get() *ConsulCache {
+func GetInstance() *ConsulCache {
 	return instance
 }
 
@@ -95,6 +107,10 @@ func Configure(consulAddress string, refreshIntervall time.Duration, services ..
 	instance.WatchServices(services...)
 	instance.refreshIntervall = refreshIntervall
 	return instance, nil
+}
+
+func Start(maxRetries int, retryTimeout time.Duration) error {
+	return instance.Start(maxRetries, retryTimeout)
 }
 
 func (cache *ConsulCache) Start(maxRetries int, retryTimeout time.Duration) error {
@@ -119,6 +135,10 @@ func (cache *ConsulCache) Start(maxRetries int, retryTimeout time.Duration) erro
 		return errors.New("unable to start cache.")
 	}
 	return nil
+}
+
+func RefreshAndRestart() error {
+	return instance.RefreshAndRestart()
 }
 
 func (cache *ConsulCache) RefreshAndRestart() error {
@@ -171,6 +191,10 @@ func (cache *ConsulCache) verifyResult() error {
 
 }
 
+func Refresh() error {
+	return instance.Refresh()
+}
+
 func (cache *ConsulCache) Refresh() error {
 	services, err := cache.serviceRetriever(cache.consulAddress)
 	if err != nil {
@@ -193,6 +217,10 @@ func (cache *ConsulCache) clear() {
 	}
 }
 
+func WatchServices(serviceNames ...string) {
+	instance.WatchServices(serviceNames...)
+}
+
 func (cache *ConsulCache) WatchServices(serviceNames ...string) {
 	cache.Lock()
 	defer cache.Unlock()
@@ -201,12 +229,20 @@ func (cache *ConsulCache) WatchServices(serviceNames ...string) {
 	}
 }
 
+func GetServiceAddress(serviceName string) (string, error) {
+	return instance.GetServiceAddress(serviceName)
+}
+
 func (cache *ConsulCache) GetServiceAddress(serviceName string) (string, error) {
 	instance, err := cache.GetServiceInstance(serviceName)
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%s:%d", instance.Address, instance.Port), nil
+}
+
+func GetServiceInstance(serviceName string) (*api.AgentService, error) {
+	return instance.GetServiceInstance(serviceName)
 }
 
 func (cache *ConsulCache) GetServiceInstance(serviceName string) (*api.AgentService, error) {
