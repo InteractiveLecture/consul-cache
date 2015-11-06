@@ -10,7 +10,7 @@ import (
 
 func TestCacheConfiguration(t *testing.T) {
 	fmt.Println("TestCacheConfiguration")
-	cache, err := Configure("discovery:8500", "authentication-service", "acl-service")
+	cache, err := Configure("discovery:8500", 1*time.Millisecond, "authentication-service", "acl-service")
 	if err != nil {
 		t.Error("expected no error got ", err)
 	}
@@ -29,7 +29,7 @@ func TestCacheConfiguration(t *testing.T) {
 func TestRefreshOk(t *testing.T) {
 
 	fmt.Println("TestRefreshCacheOk")
-	cache, _ := Configure("discovery:8500", "authentication-service", "acl-service")
+	cache, _ := Configure("discovery:8500", 1*time.Millisecond, "authentication-service", "acl-service")
 	err := cache.SetServiceRetriever(fakeRetriever)
 	if err != nil {
 		t.Error("expected no error, got ", err)
@@ -45,7 +45,7 @@ func TestRefreshOk(t *testing.T) {
 func TestRefreshFail(t *testing.T) {
 
 	fmt.Println("TestRefreshCacheFail done")
-	cache, _ := Configure("discovery:8500", "authentication-service", "acl-service", "document-service")
+	cache, _ := Configure("discovery:8500", 1*time.Millisecond, "authentication-service", "acl-service", "document-service")
 	err := cache.SetServiceRetriever(fakeRetriever)
 	if err != nil {
 		t.Error("expected no error, got ", err)
@@ -61,13 +61,13 @@ func TestRefreshFail(t *testing.T) {
 func TestStartStop(t *testing.T) {
 
 	fmt.Println("TestStartStop ")
-	cache, _ := Configure("discovery:8500", "authentication-service", "acl-service")
+	cache, _ := Configure("discovery:8500", 1*time.Millisecond, "authentication-service", "acl-service")
 	err := cache.SetServiceRetriever(fakeRetriever)
 	if err != nil {
 		t.Error("expected no error, got ", err)
 	}
 
-	err = cache.Start(1*time.Millisecond, 3, 1*time.Millisecond)
+	err = cache.Start(3, 1*time.Millisecond)
 	if err != nil {
 		t.Error("encountered error while starting cache: ", err)
 	}
@@ -84,7 +84,7 @@ func TestStartStop(t *testing.T) {
 func TestGetServiceInstance(t *testing.T) {
 
 	fmt.Println("TestGetServiceInstance")
-	cache, _ := Configure("discovery:8500", "authentication-service", "acl-service")
+	cache, _ := Configure("discovery:8500", 1*time.Millisecond, "authentication-service", "acl-service")
 	err := cache.SetServiceRetriever(fakeRetriever)
 	if err != nil {
 		t.Error("expected no error, got ", err)
@@ -114,7 +114,7 @@ func TestGetServiceInstance(t *testing.T) {
 func TestGetServiceAddress(t *testing.T) {
 
 	fmt.Println("TestGetServiceAddress")
-	cache, _ := Configure("discovery:8500", "authentication-service", "acl-service")
+	cache, _ := Configure("discovery:8500", 1*time.Millisecond, "authentication-service", "acl-service")
 	err := cache.SetServiceRetriever(fakeRetriever)
 	if err != nil {
 		t.Error("expected no error, got ", err)

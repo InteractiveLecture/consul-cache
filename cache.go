@@ -22,6 +22,7 @@ type ConsulCache struct {
 	ErrorChan        chan error
 	SuccessChan      chan bool
 	serviceRetriever ServiceRetriever
+	refreshIntervall time.Duration
 }
 
 var instance = &ConsulCache{}
@@ -81,7 +82,7 @@ func Get() *ConsulCache {
 	return instance
 }
 
-func Configure(consulAddress string, services ...string) (*ConsulCache, error) {
+func Configure(consulAddress string, refreshIntervall time.Duration, services ...string) (*ConsulCache, error) {
 	if instance.alreadyRunning {
 		return nil, errors.New("cannot configure running cache.")
 	}
@@ -92,12 +93,12 @@ func Configure(consulAddress string, services ...string) (*ConsulCache, error) {
 	instance.SuccessChan = make(chan bool)
 	instance.ErrorChan = make(chan error)
 	instance.WatchServices(services...)
+	instance.refreshIntervall = refreshIntervall
 	return instance, nil
 }
 
-func (cache *ConsulCache) Start(intervall time.Duration, maxRetries int, retryTimeout time.Duration) error {
-	err := cache.Refresh()
-	cache.RestartTicker(intervall)
+func (cache *ConsulCache) Start(maxRetries int, retryTimeout time.Duration) error {
+	err := cache.RefreshAndRestart()
 	if err != nil {
 		for i := 0; i < maxRetries; i++ {
 			select {
@@ -120,7 +121,13 @@ func (cache *ConsulCache) Start(intervall time.Duration, maxRetries int, retryTi
 	return nil
 }
 
-func (cache *ConsulCache) RestartTicker(refreshIntervall time.Duration) bool {
+func (cache *ConsulCache) RefreshAndRestart() error {
+	err := cache.Refresh()
+	cache.RestartTicker()
+	return err
+}
+
+func (cache *ConsulCache) RestartTicker() {
 	if cache.ticker != nil {
 		cache.ticker.Stop()
 		select {
@@ -130,9 +137,8 @@ func (cache *ConsulCache) RestartTicker(refreshIntervall time.Duration) bool {
 			break
 		}
 	}
-	cache.ticker = time.NewTicker(refreshIntervall)
+	cache.ticker = time.NewTicker(cache.refreshIntervall)
 	go tickerLoop(cache)
-	return true
 }
 
 func tickerLoop(cache *ConsulCache) {
