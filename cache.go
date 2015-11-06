@@ -18,6 +18,7 @@ type ConsulCache struct {
 	alreadyRunning   bool
 	ticker           *time.Ticker
 	consulAddress    string
+	abortChan        chan bool
 	ErrorChan        chan error
 	SuccessChan      chan bool
 	serviceRetriever ServiceRetriever
@@ -53,6 +54,12 @@ func (cache *ConsulCache) Stop() bool {
 	}
 	cache.alreadyRunning = false
 	cache.ticker.Stop()
+	select {
+	case cache.abortChan <- true:
+		break
+	default:
+		break
+	}
 	return true
 }
 
@@ -73,6 +80,7 @@ func (cache *ConsulCache) IsWatched(services ...string) bool {
 func Get() *ConsulCache {
 	return instance
 }
+
 func Configure(consulAddress string, services ...string) (*ConsulCache, error) {
 	if instance.alreadyRunning {
 		return nil, errors.New("cannot configure running cache.")
@@ -83,49 +91,68 @@ func Configure(consulAddress string, services ...string) (*ConsulCache, error) {
 	instance.serviceMap = make(map[string][]*api.AgentService, 0)
 	instance.SuccessChan = make(chan bool)
 	instance.ErrorChan = make(chan error)
-	for _, service := range services {
-		instance.watchService(service)
-	}
+	instance.WatchServices(services...)
 	return instance, nil
 }
 
-func (cache *ConsulCache) Start(intervall time.Duration, maxRetries int, retryTimeout time.Duration) {
-	cache.runRoutine(intervall)
-	for i := 0; i < maxRetries; i++ {
-		log.Printf("try %d", i)
-		select {
-		case err := <-cache.ErrorChan:
-			log.Printf("got signal from error channel")
-			log.Println(err)
-			time.Sleep(retryTimeout)
-		case running := <-cache.SuccessChan:
-			log.Printf("got signal from success channel, %v", running)
-			cache.alreadyRunning = running
+func (cache *ConsulCache) Start(intervall time.Duration, maxRetries int, retryTimeout time.Duration) error {
+	err := cache.Refresh()
+	cache.RestartTicker(intervall)
+	if err != nil {
+		for i := 0; i < maxRetries; i++ {
+			select {
+			case err := <-cache.ErrorChan:
+				log.Println(err)
+				time.Sleep(retryTimeout)
+			case running := <-cache.SuccessChan:
+				cache.alreadyRunning = running
+			}
+			if cache.alreadyRunning {
+				break
+			}
 		}
-		if cache.alreadyRunning {
-			break
-		}
-		log.Println("waiting finished")
+	} else {
+		cache.alreadyRunning = true
 	}
-	log.Println("startup finished")
+	if !cache.alreadyRunning {
+		return errors.New("unable to start cache.")
+	}
+	return nil
 }
 
-func (cache *ConsulCache) runRoutine(refreshIntervall time.Duration) bool {
-	if cache.alreadyRunning {
-		return false
+func (cache *ConsulCache) RestartTicker(refreshIntervall time.Duration) bool {
+	if cache.ticker != nil {
+		cache.ticker.Stop()
+		select {
+		case cache.abortChan <- true:
+			break
+		default:
+			break
+		}
 	}
 	cache.ticker = time.NewTicker(refreshIntervall)
-	go func() {
-		for _ = range cache.ticker.C {
+	go tickerLoop(cache)
+	return true
+}
+
+func tickerLoop(cache *ConsulCache) {
+	breakLoop := false
+	for {
+		select {
+		case <-cache.ticker.C:
 			err := cache.Refresh()
 			if err != nil {
 				cache.ErrorChan <- err
 				continue
 			}
 			cache.SuccessChan <- true
+		case breakLoop = <-cache.abortChan:
+			break
 		}
-	}()
-	return true
+		if breakLoop {
+			break
+		}
+	}
 }
 
 func (cache *ConsulCache) verifyResult() error {
@@ -139,7 +166,6 @@ func (cache *ConsulCache) verifyResult() error {
 }
 
 func (cache *ConsulCache) Refresh() error {
-	log.Println("refresh cache...")
 	services, err := cache.serviceRetriever(cache.consulAddress)
 	if err != nil {
 		return err
@@ -161,8 +187,12 @@ func (cache *ConsulCache) clear() {
 	}
 }
 
-func (cache *ConsulCache) watchService(serviceName string) {
-	cache.serviceMap[serviceName] = make([]*api.AgentService, 0)
+func (cache *ConsulCache) WatchServices(serviceNames ...string) {
+	cache.Lock()
+	defer cache.Unlock()
+	for _, service := range serviceNames {
+		cache.serviceMap[service] = make([]*api.AgentService, 0)
+	}
 }
 
 func (cache *ConsulCache) GetServiceAddress(serviceName string) (string, error) {
