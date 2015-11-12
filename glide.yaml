@@ -1,9 +1,8 @@
-parent: null
 package: servicecache
 import:
 - package: github.com/hashicorp/consul
   subpackages:
   - /api
 - package: github.com/stretchr/testify
-  subpackages:
-  - /assert
+ subpackages:
+ - /assert
